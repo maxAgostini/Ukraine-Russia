@@ -1,0 +1,58 @@
+---
+title: "Ukraine-Russia"
+author: "Maximilian Agostini, Tasja Mueller, Ben Guetzkow, Pontus Leander, Jannis Kreienkamp"
+date: "3/3/2022"
+output:
+  html_document:
+    code_folding: hide
+    mathjax: default
+    theme: united
+    toc: yes
+    toc_float: yes
+    number_sections: TRUE
+  pdf_document:
+    toc: yes
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+cat("\014") # clear console
+rm(list=ls()) # clear workspace
+gc # garbage collector
+
+require(pacman)
+p_load(metafor, tidyr, dplyr, tinytex, knitr, kableExtra, DescTools, reshape2, metaSEM, lavaan, semPlot, psych, ggplot2, MplusAutomation, bmlm)
+
+set.seed(52) # set overall random seed for reproducibility
+```
+
+# Load Data
+```{r LoadRawBase, echo=T, warning=F, message=F}
+# Import Data
+dtRaw <- haven::read_spss("M:/.00 Research/Datasets/Ukraine+Russia_March+3,+2022_19.sav")
+```
+
+# Prepare Data
+## Cleaning
+```{r}
+tmp <- dtRaw
+
+# exclude practice trials (before we launched on MTurk which was at 2022-02-25 01:42:04)
+tmp$StartDate <- as.POSIXct(tmp$StartDate)
+tmp <- tmp[tmp$StartDate > as.POSIXct("2022-02-25 01:40:00", tz = "UTC"),]
+
+# exclude participants that did not get to the informed consent (ethics)
+tmp <- tmp$Progress
+
+
+```
+
+
+
