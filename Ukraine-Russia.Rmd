@@ -36,11 +36,11 @@ set.seed(52) # set overall random seed for reproducibility
 # Load Data
 ```{r LoadRawBase, echo=T, warning=F, message=F}
 # Import Data
-dtRaw <- haven::read_spss("M:/.00 Research/Datasets/Ukraine+Russia_March+3,+2022_19.sav")
+dtRaw <- haven::read_spss("M:/.00 Research/Datasets/Ukraine+Russia_March+5,+2022_17.sav")
 ```
 
 # Prepare Data
-## Cleaning
+## Cleaning (not collected)
 ```{r}
 tmp <- dtRaw
 
@@ -49,10 +49,59 @@ tmp$StartDate <- as.POSIXct(tmp$StartDate)
 tmp <- tmp[tmp$StartDate > as.POSIXct("2022-02-25 01:40:00", tz = "UTC"),]
 
 # exclude participants that did not get to the informed consent (ethics)
-tmp <- tmp$Progress
+tmp <- tmp[tmp$Progress > 95,]
+
+df <- tmp; rm(tmp, dtRaw)
+```
+We collected a total of `nrow(tmp)` participants.
+
+## Cleaning (data quality)
+```{r}
+# identify duplicate IPs (but only the second entry! we keep the first one)
+dupli <- df[duplicated(df$IPAddress),]
+paste("We removed", nrow(dupli), "entries for entering the study from the same IP (difficult to establish independence of measurements).", sep = " ")
+df <- df[!duplicated(df$IPAddress),]
+
+# check for straightliner
 
 
 ```
 
+
+## Share Data
+```{r}
+share <- df %>%
+  select(-contains("mTurk"),
+         -starts_with("t_"),
+         -contains("_DO_"),
+         -contains("TEXT"),
+         -contains("Date"),
+         -contains("Name"),
+         -contains("Email"),
+         -contains("Location"),
+         -contains("User"),
+         -contains("_Other"),
+         -ExternalReference,
+         -ResponseId,
+         -Duration__in_seconds_,
+         -DistributionChannel,
+         -Finished,
+         -debrief,
+         -Status,
+         -IPAddress,
+         -Progress,
+         -end_positive_how)
+
+haven::write_sav(share, "M:/.00 Research/Datasets/cleaned/2022_03_05_Ukraine-Russia.sav")
+
+
+```
+
+## Prepare scales
+```{r}
+
+
+
+```
 
 
