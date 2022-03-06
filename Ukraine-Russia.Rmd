@@ -60,10 +60,21 @@ We collected a total of `nrow(tmp)` participants.
 # identify duplicate IPs (but only the second entry! we keep the first one)
 dupli <- df[duplicated(df$IPAddress),]
 paste("We removed", nrow(dupli), "entries for entering the study from the same IP (difficult to establish independence of measurements).", sep = " ")
-df <- df[!duplicated(df$IPAddress),]
+df <- df[!duplicated(df$IPAddress),]; rm(dupli)
 
 # check for straightliner
+# isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
+strLine <- df %>%
+  dplyr::select(ResponseId, SDO_01, SDO_02, SDO_03, SDO_04) %>%
+  na.omit() %>% # remove people who have missing data on one of the three items
+  mutate(mean = rowMeans(dplyr::select(., contains("SDO"))), 
+         sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("SDO"))))) %>% # calculate row-means and row-sds 
+  filter(sd == 0, mean != 5, mean != 6)
+paste("We removed", nrow(strLine), "entries for straighlining on the SDO scale.", sep = " ")
 
+# remove straightliners
+  df <- df %>%
+    filter(!ResponseId %in% strLine$ResponseId); rm(strLine)
 
 ```
 
@@ -92,8 +103,7 @@ share <- df %>%
          -Progress,
          -end_positive_how)
 
-haven::write_sav(share, "M:/.00 Research/Datasets/cleaned/2022_03_05_Ukraine-Russia.sav")
-
+haven::write_sav(share, "M:/.00 Research/Datasets/cleaned/2022_03_05_Ukraine-Russia.sav"); rm(share)
 
 ```
 
