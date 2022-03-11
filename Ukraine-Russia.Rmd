@@ -10,6 +10,9 @@ output:
     toc: yes
     toc_float: yes
     number_sections: TRUE
+    fig_width: 12
+    fig_height: 10
+    fig_align: center
   pdf_document:
     toc: yes
 ---
@@ -30,6 +33,7 @@ gc # garbage collector
 require(pacman)
 p_load(metafor, tidyr, dplyr, tinytex, knitr, kableExtra, DescTools, reshape2, metaSEM, lavaan, semPlot, psych, ggplot2, MplusAutomation, bmlm)
 
+source("./funcs/fun.panel.R") #load relevant functions
 set.seed(52) # set overall random seed for reproducibility
 ```
 
@@ -50,10 +54,10 @@ tmp <- tmp[tmp$StartDate > as.POSIXct("2022-02-25 01:40:00", tz = "UTC"),]
 
 # exclude participants that did not get to the informed consent (ethics)
 tmp <- tmp[tmp$Progress > 95,]
+paste("We collected a total of", nrow(tmp), "participants.", sep = " ")
 
 df <- tmp; rm(tmp, dtRaw)
 ```
-We collected a total of `nrow(tmp)` participants.
 
 ## Cleaning (data quality)
 ```{r}
@@ -77,9 +81,215 @@ paste("We removed", nrow(strLine), "entries for straighlining on the SDO scale."
     filter(!ResponseId %in% strLine$ResponseId); rm(strLine)
 
 ```
+## Prepare scales
+### Need Measures
+Similar to Gerber, Chang, Reimel (2016), we do not find a four factor solution. We do, however, observe a very similar two-factor soluation; similar to them loading on the wording positive/ negatively worded items.
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("Need_") & !contains("_DO_"))
 
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
 
-## Share Data
+# confirmatory factor analysis
+#correlated four factor solution, marker method
+model <- 'f1_blng =~ Need_Disc + Need_Rej + Need_Outside
+          f2_estem =~ Need_Good + Need_Insecure + Need_Liked
+          f3_mean =~ Need_Invisible + Need_Important + Need_Useful
+          f4_ctrl = ~ Need_Control + Need_Pow + Need_Signif
+         ' 
+facAna <- cfa(model, data=tmp) 
+summary(facAna,fit.measures=TRUE,standardized=TRUE)
+
+semPlot::semPaths(facAna, "std")
+
+# exploratory factor analysis
+psych::fa.parallel(tmp, fm = "minres", fa = "fa")
+
+res_fa <- psych::fa(tmp, nfactors = 2, rotate = "varimax", fm = "minres")
+print(res_fa$loadings, cutoff = 0.3)
+rm(tmp, model, facAna, res_fa)
+```
+
+### Behavioral Intentions
+The no fly zone item seems to be seen as non-violent. Three factor solution does not work too well.
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("viol_ukr_") & !contains("_DO_"),
+         contains("phys_Ukr_") & !contains("_DO_"),
+         contains("nonviol_Ukr_") & !contains("_DO_"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+# we remove no intervention as different methodologically
+tmp <- tmp %>%
+  select(!nonviol_Ukr_noIntervene)
+
+# confirmatory factor analysis
+#correlated four factor solution, marker method
+model <- 'f1_violent =~ viol_ukr_noFlyZone + viol_ukr_strike + viol_ukr_specops
+          f2_nonViol =~ nonviol_Ukr_diplo + nonviol_Ukr_sanction + nonviol_Ukr_finance
+          f3_phys =~ phys_Ukr_corridor + phys_Ukr_safeZone + phys_Ukr_blackout
+         ' 
+facAna <- cfa(model, data=tmp) 
+summary(facAna,fit.measures=TRUE,standardized=TRUE)
+
+semPlot::semPaths(facAna, "std")
+
+# exploratory factor analysis
+psych::fa.parallel(tmp, fm = "minres", fa = "fa")
+
+res_fa <- psych::fa(tmp, nfactors = 2, rotate = "varimax", fm = "minres")
+print(res_fa$loadings, cutoff = 0.4)
+rm(tmp, model, facAna, res_fa)
+```
+
+### Rationalizations
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("ratio_") & !contains("_DO_"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$ratio <- scoreItems(keys = c(1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+rm(tmp)
+
+```
+
+### ProSocial Intentions
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("proIn_") & !contains("_DO_"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$proIn <- scoreItems(keys = c(1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+rm(tmp)
+```
+
+### Disempowerment
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("fail") & !contains("_DO_") & !contains("t_"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$fail <- scoreItems(keys = c(1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+rm(tmp)
+```
+
+### SDO
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("SDO") & !contains("_DO_") & !contains("t_"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(-1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$SDO <- scoreItems(keys = c(-1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+rm(tmp)
+```
+
+### Christian nationalism
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("chris") & !contains("_DO_") & !contains("t_c"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$christ <- scoreItems(keys = c(1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+rm(tmp)
+```
+
+### Immigrant prejudice
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("threat_") & !contains("_DO_") & !contains("t_c"))
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$threat <- scoreItems(keys = c(1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+rm(tmp)
+```
+
+### Locomoation and Assesment
+```{r}
+# select relevant vars
+tmp <- df %>%
+  select(contains("Loc_Ass_") & !contains("_DO_"))
+
+# confirmatory factor analysis
+#correlated four factor solution, marker method
+model <- 'loco =~ Loc_Ass_01 + Loc_Ass_03 + Loc_Ass_04 + Loc_Ass_05 + Loc_Ass_08 + Loc_Ass_12 + Loc_Ass_14 + Loc_Ass_17 + Loc_Ass_19 + Loc_Ass_20 + Loc_Ass_22 + Loc_Ass_23
+          assess =~ Loc_Ass_02 + Loc_Ass_06 + Loc_Ass_07 + Loc_Ass_09 + Loc_Ass_10 + Loc_Ass_11 + Loc_Ass_13 + Loc_Ass_15 + Loc_Ass_16 + Loc_Ass_18 + Loc_Ass_21 + Loc_Ass_24
+         ' 
+facAna <- cfa(model, data=tmp) 
+summary(facAna,fit.measures=TRUE,standardized=TRUE)
+
+semPlot::semPaths(facAna, "std")
+
+# exploratory factor analysis
+psych::fa.parallel(tmp, fm = "minres", fa = "fa")
+
+res_fa <- psych::fa(tmp, nfactors = 2, rotate = "varimax", fm = "minres")
+print(res_fa$loadings, cutoff = 0.3)
+rm(tmp, facAna, res_fa, model)
+
+#----------Simple Alpha follows-----------------------
+# Locomotion
+tmp <- df %>%
+  select(Loc_Ass_01, Loc_Ass_03, Loc_Ass_04, Loc_Ass_05, Loc_Ass_08, Loc_Ass_12, Loc_Ass_14, Loc_Ass_17, Loc_Ass_19, Loc_Ass_20, Loc_Ass_22, Loc_Ass_23)
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp))
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(1,1,1,1,1,-1,1,1,1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$loco <- scoreItems(keys = c(1,1,1,1,1,-1,1,1,1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+
+# Assessment
+tmp <- df %>%
+  select(Loc_Ass_02, Loc_Ass_06, Loc_Ass_07, Loc_Ass_09, Loc_Ass_10, Loc_Ass_11, Loc_Ass_13, Loc_Ass_15, Loc_Ass_16, Loc_Ass_18, Loc_Ass_21,  Loc_Ass_24)
+
+# get descriptives
+psych::describe(tmp)
+pairs.panels.new(tmp)
+
+scoreItems(keys = c(-1,1,1,1,-1,1,1,1,1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$assess <- scoreItems(keys = c(-1,1,1,1,-1,1,1,1,1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+
+rm(tmp)
+```
+
+# Share Data
 ```{r}
 share <- df %>%
   select(-contains("mTurk"),
@@ -103,15 +313,9 @@ share <- df %>%
          -Progress,
          -end_positive_how)
 
-haven::write_sav(share, "M:/.00 Research/Datasets/cleaned/2022_03_05_Ukraine-Russia.sav"); rm(share)
+haven::write_sav(share, "M:/.00 Research/Datasets/cleaned/2022_03_11_Ukraine-Russia.sav"); rm(share)
 
 ```
 
-## Prepare scales
-```{r}
-
-
-
-```
 
 
