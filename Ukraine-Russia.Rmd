@@ -80,7 +80,7 @@ df <- df[!duplicated(df$IPAddress),]; rm(dupli)
            sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("SDO"))))) # calculate row-means and row-sds 
   
   strLine <- strLine %>%
-    filter(sd < 1, mean < 4.5 | mean > 6.5) # sd < 0.6 would also work
+    filter(sd < 1, mean < 4.5 | mean > 6.5) # sd < 0.6 or < 1 would also work
   paste("We removed", nrow(strLine), "entries for straighlining on the SDO scale.", sep = " ")
   # remove straightliners
     df <- df %>%
@@ -95,7 +95,7 @@ df <- df[!duplicated(df$IPAddress),]; rm(dupli)
            sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("Loc_Ass_"))))) # calculate row-means and row-sds 
   
   strLine <- strLine %>%
-    filter(sd < 1, mean < 2.5 | mean > 4.5) # sd < 0.5 would also work
+    filter(sd < 1, mean < 2.5 | mean > 4.5) # sd < 0.5 or < 0.1 would also work
   paste("We removed", nrow(strLine), "entries for straighlining on the Locomotion scale.", sep = " ")
   # remove straightliners
     df <- df %>%
@@ -110,7 +110,7 @@ df <- df[!duplicated(df$IPAddress),]; rm(dupli)
            sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("Loc_Ass_"))))) # calculate row-means and row-sds 
   
   strLine <- strLine %>%
-    filter(sd < 1, mean < 2.5 | mean > 4.5) # sd < 0.5 would also work
+    filter(sd < 1, mean < 2.5 | mean > 4.5) # sd < 0.5 or < 0.1 would also work
   paste("We removed", nrow(strLine), "entries for straighlining on the Locomotion scale.", sep = " ")
   # remove straightliners
     df <- df %>%
@@ -127,7 +127,7 @@ tmp <- df %>%
   select(contains("Need_") & !contains("_DO_"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 # confirmatory factor analysis
@@ -148,6 +148,18 @@ psych::fa.parallel(tmp, fm = "minres", fa = "fa")
 res_fa <- psych::fa(tmp, nfactors = 2, rotate = "varimax", fm = "minres")
 print(res_fa$loadings, cutoff = 0.3)
 rm(tmp, model, facAna, res_fa)
+
+# positive worded needs
+tmp <- df %>%
+  select(Need_Good, Need_Liked, Need_Important, Need_Useful, Need_Control, Need_Pow, Need_Signif)
+scoreItems(keys = c(1,1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$needs_pos <- scoreItems(keys = c(1,1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores 
+
+# negative worded needs
+tmp <- df %>%
+  select(Need_Disc, Need_Rej, Need_Outside, Need_Insecure, Need_Invisible)
+scoreItems(keys = c(1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$needs_neg <- scoreItems(keys = c(1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores 
 ```
 
 ### Behavioral Intentions
@@ -160,7 +172,7 @@ tmp <- df %>%
          contains("nonviol_Ukr_") & !contains("_DO_"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 # we remove no intervention as different methodologically
@@ -184,6 +196,18 @@ psych::fa.parallel(tmp, fm = "minres", fa = "fa")
 res_fa <- psych::fa(tmp, nfactors = 2, rotate = "varimax", fm = "minres")
 print(res_fa$loadings, cutoff = 0.4)
 rm(tmp, model, facAna, res_fa)
+
+# violent factor
+tmp <- df %>%
+  select(viol_ukr_strike, viol_ukr_specops)
+scoreItems(keys = c(1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$help_violent <- scoreItems(keys = c(1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores 
+
+# non-violent factor
+tmp <- df %>%
+  select(nonviol_Ukr_diplo, nonviol_Ukr_sanction, nonviol_Ukr_finance, phys_Ukr_corridor, phys_Ukr_safeZone, phys_Ukr_blackout, phys_Ukr_provWeap)
+scoreItems(keys = c(1,1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
+df$help_nonviolent <- scoreItems(keys = c(1,1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores 
 ```
 
 ### Rationalizations
@@ -193,7 +217,7 @@ tmp <- df %>%
   select(contains("ratio_") & !contains("_DO_"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -209,7 +233,7 @@ tmp <- df %>%
   select(contains("proIn_") & !contains("_DO_"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -224,7 +248,7 @@ tmp <- df %>%
   select(contains("fail") & !contains("_DO_") & !contains("t_"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -239,7 +263,7 @@ tmp <- df %>%
   select(contains("SDO") & !contains("_DO_") & !contains("t_"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(-1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -254,7 +278,7 @@ tmp <- df %>%
   select(contains("chris") & !contains("_DO_") & !contains("t_c"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -269,7 +293,7 @@ tmp <- df %>%
   select(contains("threat_") & !contains("_DO_") & !contains("t_c"))
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -309,7 +333,7 @@ tmp <- df %>%
   select(Loc_Ass_01, Loc_Ass_03, Loc_Ass_04, Loc_Ass_05, Loc_Ass_08, Loc_Ass_12, Loc_Ass_14, Loc_Ass_17, Loc_Ass_19, Loc_Ass_20, Loc_Ass_22, Loc_Ass_23)
 
 # get descriptives
-sjPlot::tab_df(psych::describe(tmp))
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(1,1,1,1,1,-1,1,1,1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -322,7 +346,7 @@ tmp <- df %>%
   select(Loc_Ass_02, Loc_Ass_06, Loc_Ass_07, Loc_Ass_09, Loc_Ass_10, Loc_Ass_11, Loc_Ass_13, Loc_Ass_15, Loc_Ass_16, Loc_Ass_18, Loc_Ass_21,  Loc_Ass_24)
 
 # get descriptives
-psych::describe(tmp)
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
 pairs.panels.new(tmp)
 
 scoreItems(keys = c(-1,1,1,1,-1,1,1,1,1,1,-1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))
@@ -330,6 +354,19 @@ df$assess <- scoreItems(keys = c(-1,1,1,1,-1,1,1,1,1,1,-1,1), items = tmp, min =
 
 rm(tmp)
 ```
+
+# Analyses
+## Preliminary Analyses
+```{r}
+tmp <- df %>%
+  select(needs_pos, needs_neg, fail,
+         help_violent, help_nonviolent)
+
+# get descriptives
+sjPlot::tab_df(psych::describe(tmp), show.rownames = T)
+pairs.panels.new(tmp)
+```
+
 
 # Share Data
 ```{r}
