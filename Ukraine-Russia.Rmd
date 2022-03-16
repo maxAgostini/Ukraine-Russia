@@ -69,7 +69,7 @@ df <- df[!duplicated(df$IPAddress),]; rm(dupli)
 # identify duplicate MTurkIds (but only the second entry! we keep the first one)
 dupli <- df[duplicated(df$mTurkID),]
 paste("We removed", nrow(dupli), "entries for entering the same MTurkId (difficult to establish independence of measurements).", sep = " ")
-df <- df[!duplicated(df$IPAddress),]; rm(dupli)
+df <- df[!duplicated(df$mTurkID),]; rm(dupli)
 
 # check for straightliner on SDO
   # isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
