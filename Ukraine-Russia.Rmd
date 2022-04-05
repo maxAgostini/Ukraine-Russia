@@ -34,7 +34,7 @@ require(pacman)
 p_load(tidyr, dplyr, psych, tidytext, ggplot2, reshape2, plyr, stringr, mclust, tictoc, fpc, factoextra, apcluster, clValid, vegan)
 library(kluster) # installed from devtools::install_github("hestiri/kluster")
 
-source("./funcs/fun.panel.R") #load relevant functions
+#source("./funcs/fun.panel.R") #load relevant functions
 set.seed(52) # set overall random seed for reproducibility
 ```
 
@@ -82,46 +82,48 @@ raw$clean_MTurk <- ifelse(raw$ResponseId %in% dupli$ResponseId, 1, 0); rm(dupli)
     na.omit() %>% # remove people who have missing data on one of the three items
     mutate(mean = rowMeans(dplyr::select(., contains("SDO"))), 
            sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("SDO"))))) # calculate row-means and row-sds 
-  
+
   strLine <- strLine %>%
-    filter(sd < 1, mean < 4.5 | mean > 6.5) # sd < 0.6 or < 1 would also work
+    filter(sd < 0.6, mean < 4.5 | mean > 6.5) # sd < 0.6 or < 1 would also work
   paste("We removed", nrow(strLine), "entries for straighlining on the SDO scale.", sep = " ")
   # remove straightliners
     df <- df %>%
       filter(!ResponseId %in% strLine$ResponseId)
     raw$clean_SDO <- ifelse(raw$ResponseId %in% strLine$ResponseId, 1, 0); rm(strLine)
+    df_withoutSDO <- df
 
 # check for straightliner on Locomotion
   # isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
-  strLine <- df %>%
+  strLine_Loc <- df %>%
     dplyr::select(ResponseId, Loc_Ass_01, Loc_Ass_03, Loc_Ass_04, Loc_Ass_05, Loc_Ass_08, Loc_Ass_12, Loc_Ass_14, Loc_Ass_17, Loc_Ass_19, Loc_Ass_20, Loc_Ass_22, Loc_Ass_23) %>%
     na.omit() %>% # remove people who have missing data on one of the items
     mutate(mean = rowMeans(dplyr::select(., contains("Loc_Ass_"))), 
            sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("Loc_Ass_"))))) # calculate row-means and row-sds 
   
-  strLine <- strLine %>%
+  strLine_Loc <- strLine_Loc %>%
     filter(sd < 1, mean < 2.5 | mean > 4.5) # sd < 0.5 or < 0.1 would also work
-  paste("We removed", nrow(strLine), "entries for straighlining on the Locomotion scale.", sep = " ")
+  paste("We removed", nrow(strLine_Loc), "entries for straighlining on the Locomotion scale.", sep = " ")
   # remove straightliners
     df <- df %>%
-      filter(!ResponseId %in% strLine$ResponseId)
-    raw$clean_Ass <- ifelse(raw$ResponseId %in% strLine$ResponseId, 1, 0); rm(strLine)
+      filter(!ResponseId %in% strLine_Loc$ResponseId)
+    raw$clean_Loc <- ifelse(raw$ResponseId %in% strLine_Loc$ResponseId, 1, 0)
+    df_withoutSDO$clean_Loc <- ifelse(df_withoutSDO$ResponseId %in% strLine_Loc$ResponseId, 1, 0)
 
 # check for straightliner on Assessment
   # isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
-  strLine <- df %>%
+  strLine_Ass <- df %>%
     dplyr::select(ResponseId, Loc_Ass_02, Loc_Ass_06, Loc_Ass_07, Loc_Ass_09, Loc_Ass_10, Loc_Ass_11, Loc_Ass_13, Loc_Ass_15, Loc_Ass_16, Loc_Ass_18, Loc_Ass_21,  Loc_Ass_24) %>%
     na.omit() %>% # remove people who have missing data on one of the items
     mutate(mean = rowMeans(dplyr::select(., contains("Loc_Ass_"))), 
            sd = matrixStats::rowSds(as.matrix(dplyr::select(., contains("Loc_Ass_"))))) # calculate row-means and row-sds 
   
-  strLine <- strLine %>%
+  strLine_Ass <- strLine_Ass %>%
     filter(sd < 1, mean < 2.5 | mean > 4.5) # sd < 0.5 or < 0.1 would also work
-  paste("We removed", nrow(strLine), "entries for straighlining on the Locomotion scale.", sep = " ")
+  paste("We removed", nrow(strLine_Ass), "entries for straighlining on the Locomotion scale.", sep = " ")
   # remove straightliners
     df <- df %>%
-      filter(!ResponseId %in% strLine$ResponseId)
-    raw$clean_Loc <- ifelse(raw$ResponseId %in% strLine$ResponseId, 1, 0); rm(strLine)
+      filter(!ResponseId %in% strLine_Ass$ResponseId)
+    raw$clean_Ass <- ifelse(raw$ResponseId %in% strLine_Ass$ResponseId, 1, 0)
     
 raw$clean_all <- raw %>%
   select(contains("clean")) %>%
@@ -132,6 +134,33 @@ raw$clean_all <- raw %>%
 ### kluster package
 (c) https://github.com/hestiri/kluster/blob/master/vignettes/demo.Rmd
 #### plot before klustering
+```{r}
+tmp <- df_withoutSDO %>%
+  select(Loc_Ass_01, Loc_Ass_03, Loc_Ass_04, Loc_Ass_05, Loc_Ass_08, Loc_Ass_14, Loc_Ass_17, Loc_Ass_19, Loc_Ass_20, Loc_Ass_23)
+df_withoutSDO$Loc_pos <- scoreItems(keys = c(1,1,1,1,1,1,1,1,1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+tmp <- df_withoutSDO %>%
+  select(Loc_Ass_12, Loc_Ass_22)
+df_withoutSDO$Loc_neg <- scoreItems(keys = c(1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores
+df_withoutSDO$clean_Loc <- factor(df_withoutSDO$clean_Loc, levels = c(0,1), labels = c("no", "yes"))
+
+ggplot()+
+  geom_point(data = df_withoutSDO, aes(x=Loc_pos, y= Loc_neg, colour = clean_Loc),size=3,alpha=0.3)+
+  ggtitle("") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_line(colour = "gray"),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(size=0.5, colour = "black"),
+        panel.border = element_blank(), panel.background = element_blank(),
+        plot.title = element_text(size = 14, face = "bold"),
+        text=element_text(face = "bold"),
+        axis.text.x=element_text(colour="black", size = 10, face="plain"),
+        axis.text.y=element_text(colour="black", size = 10, face="plain"),
+        legend.position="bottom")
+
+
+
+```
+
 ```{r}
 tmp <- raw %>%
   select(SDO_01, SDO_03)
@@ -156,6 +185,7 @@ ggplot(dat)+
         legend.position="bottom")
 
 ```
+
 #### run kluster
 In a first step we simply run the kluster to get the most likely number of clusters in the data. We use BIC and PAMK as those are the ones that most often seem to get close.
 ```{r}
