@@ -31,7 +31,8 @@ rm(list=ls()) # clear workspace
 gc # garbage collector
 
 require(pacman)
-p_load(metafor, tidyr, dplyr, tinytex, knitr, kableExtra, DescTools, reshape2, metaSEM, lavaan, semPlot, psych, ggplot2, MplusAutomation, bmlm)
+p_load(tidyr, dplyr, psych, tidytext, ggplot2, reshape2, plyr, stringr, mclust, tictoc, fpc, factoextra, apcluster, clValid, vegan)
+library(kluster) # installed from devtools::install_github("hestiri/kluster")
 
 source("./funcs/fun.panel.R") #load relevant functions
 set.seed(52) # set overall random seed for reproducibility
@@ -57,6 +58,7 @@ tmp <- tmp[tmp$Progress > 95,]
 paste("We collected a total of", nrow(tmp), "participants.", sep = " ")
 
 df <- tmp; rm(tmp, dtRaw)
+raw <- df
 ```
 
 ## Cleaning (data quality)
@@ -64,12 +66,14 @@ df <- tmp; rm(tmp, dtRaw)
 # identify duplicate IPs (but only the second entry! we keep the first one)
 dupli <- df[duplicated(df$IPAddress),]
 paste("We removed", nrow(dupli), "entries for entering the study from the same IP (difficult to establish independence of measurements).", sep = " ")
-df <- df[!duplicated(df$IPAddress),]; rm(dupli)
+df <- df[!duplicated(df$IPAddress),]
+raw$clean_IP <- ifelse(raw$ResponseId %in% dupli$ResponseId, 1, 0); rm(dupli)
 
 # identify duplicate MTurkIds (but only the second entry! we keep the first one)
 dupli <- df[duplicated(df$mTurkID),]
 paste("We removed", nrow(dupli), "entries for entering the same MTurkId (difficult to establish independence of measurements).", sep = " ")
-df <- df[!duplicated(df$mTurkID),]; rm(dupli)
+df <- df[!duplicated(df$mTurkID),]
+raw$clean_MTurk <- ifelse(raw$ResponseId %in% dupli$ResponseId, 1, 0); rm(dupli)
 
 # check for straightliner on SDO
   # isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
@@ -84,7 +88,8 @@ df <- df[!duplicated(df$mTurkID),]; rm(dupli)
   paste("We removed", nrow(strLine), "entries for straighlining on the SDO scale.", sep = " ")
   # remove straightliners
     df <- df %>%
-      filter(!ResponseId %in% strLine$ResponseId); rm(strLine)
+      filter(!ResponseId %in% strLine$ResponseId)
+    raw$clean_SDO <- ifelse(raw$ResponseId %in% strLine$ResponseId, 1, 0); rm(strLine)
 
 # check for straightliner on Locomotion
   # isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
@@ -99,7 +104,8 @@ df <- df[!duplicated(df$mTurkID),]; rm(dupli)
   paste("We removed", nrow(strLine), "entries for straighlining on the Locomotion scale.", sep = " ")
   # remove straightliners
     df <- df %>%
-      filter(!ResponseId %in% strLine$ResponseId); rm(strLine)
+      filter(!ResponseId %in% strLine$ResponseId)
+    raw$clean_Ass <- ifelse(raw$ResponseId %in% strLine$ResponseId, 1, 0); rm(strLine)
 
 # check for straightliner on Assessment
   # isolate respondents who have straightlined outside a the median categories (b/c all "neither agree nor disagree" might be meaningful response) 
@@ -114,8 +120,127 @@ df <- df[!duplicated(df$mTurkID),]; rm(dupli)
   paste("We removed", nrow(strLine), "entries for straighlining on the Locomotion scale.", sep = " ")
   # remove straightliners
     df <- df %>%
-      filter(!ResponseId %in% strLine$ResponseId); rm(strLine)
+      filter(!ResponseId %in% strLine$ResponseId)
+    raw$clean_Loc <- ifelse(raw$ResponseId %in% strLine$ResponseId, 1, 0); rm(strLine)
+    
+raw$clean_all <- raw %>%
+  select(contains("clean")) %>%
+  rowSums()
 
+```
+
+### kluster package
+(c) https://github.com/hestiri/kluster/blob/master/vignettes/demo.Rmd
+#### plot before klustering
+```{r}
+tmp <- raw %>%
+  select(SDO_01, SDO_03)
+raw$SDO_pos <- scoreItems(keys = c(1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores; rm(tmp) 
+tmp <- raw %>%
+  select(SDO_02, SDO_04)
+raw$SDO_neg <- scoreItems(keys = c(1,1), items = tmp, min = min(tmp[1]), max = max(tmp[1]))$scores; rm(tmp)
+raw$clean_SDO <- factor(raw$clean_SDO, levels = c(0,1), labels = c("no", "yes"))
+
+ggplot(dat)+
+  geom_point(data = raw, aes(x=SDO_pos, y= SDO_neg,colour=clean_SDO),size=3,alpha=0.3)+
+  ggtitle("") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_line(colour = "gray"),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(size=0.5, colour = "black"),
+        panel.border = element_blank(), panel.background = element_blank(),
+        plot.title = element_text(size = 14, face = "bold"),
+        text=element_text(face = "bold"),
+        axis.text.x=element_text(colour="black", size = 10, face="plain"),
+        axis.text.y=element_text(colour="black", size = 10, face="plain"),
+        legend.position="bottom")
+
+```
+#### run kluster
+In a first step we simply run the kluster to get the most likely number of clusters in the data. We use BIC and PAMK as those are the ones that most often seem to get close.
+```{r}
+tmp <- raw %>%
+  dplyr::select(SDO_01, SDO_02, SDO_03, SDO_04)
+
+iter_klust <- 50
+smpl <- 100
+
+# Bayesian Information Criterion clustering
+out_kluster_BIC <- kluster::kluster(data = tmp,
+                                iter_klust = iter_klust, # can also be ignored and recommended will be used
+                                smpl = smpl, # can also be ignored and recommended will be used
+                                algorithm = "BIC") # specify or will crush with large sample
+
+# Partitioning Around Medoids clustering
+out_kluster_PAMK <- kluster::kluster(data = tmp,
+                                iter_klust = iter_klust, # can also be ignored and recommended will be used
+                                smpl = smpl, # can also be ignored and recommended will be used
+                                algorithm = "PAMK") # specify or will crush with large sample
+
+```
+
+#### evaluate kluster
+We then evaluate the kluster to a specific number of expected cluster (in our case two: straightliners and non-straightliners):
+- e_mean and e_freq represent the respective error terms for the mean and most frequent `kluster` products on each algorithms.  
+- k_mean and k_freq the mean and most frequent kluster products
+- ptime is the processing time
+(we do not need the cluster_sim function as we are not interested in the original algorithms)
+```{r}
+eval_kluster <- data.frame(kluster_eval(data = tmp, 
+                              clusters = 2,#known gold standard number of clusters
+                              iter_sim = 1,#number of simulation iterations if need be more than 1
+                              iter_klust = iter_klust,#iteration for each algorithm
+                              algorithm = "Default", #select analysis algorithm from BIC, PAMK, CAL, and AP
+                              smpl = smpl))
+
+sjPlot::tab_df(eval_kluster %>% select(starts_with("sim")))
+```
+
+#### extract clusters
+After evaluating different algorithms we can try to extract the clusters (PAM suggests two which we would like :))
+```{r}
+out_hkmeans <- factoextra::hkmeans(tmp, 2)
+factoextra::fviz_cluster(out_hkmeans)
+```
+
+#### visualize klustering
+```{r}
+kluster_vis = factor(out_hkmeans$cluster, labels = c("clust1", "clust2"))
+
+ggplot(dat)+
+  geom_point(data = raw, aes(x=SDO_pos, 
+                             y= SDO_neg,
+                             colour=kluster_vis),
+             size=3,alpha=0.3)+
+  ggtitle("") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_line(colour = "gray"),
+        panel.grid.minor.y = element_blank(),
+        axis.line = element_line(size=0.5, colour = "black"),
+        panel.border = element_blank(), panel.background = element_blank(),
+        plot.title = element_text(size = 14, face = "bold"),
+        text=element_text(face = "bold"),
+        axis.text.x=element_text(colour="black", size = 10, face="plain"),
+        axis.text.y=element_text(colour="black", size = 10, face="plain"),
+        legend.position="bottom")
+```
+
+#### find improbable klusters
+```{r}
+tmp <- data.frame(table(out_hkmeans$cluster))
+tmp$Perc <- tmp$Freq / sum(tmp$Freq) * 100
+colnames(tmp)[1] <- c("Kluster")
+sjPlot::tab_df(tmp)
+
+# get percentage of datapoints within each kluster
+prop_cluster <- prop.table(table(out_hkmeans$cluster))
+
+# check whether datapoints smaller than specified alpha
+cut_off <- c(0.05, 0.005)
+for (val in cut_off) {
+  print(paste("Cut-off:", val, sep = " "))
+  print(prop_cluster < val)
+}
 ```
 
 ## Prepare scales
